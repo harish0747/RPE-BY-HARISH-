@@ -56,23 +56,6 @@ const projectRoot = process.cwd();
 }
 
 });
-      
-      const filesToInclude = [
-        "package.json",
-        "tsconfig.json",
-        "vite.config.ts",
-        "server.ts",
-        "index.html",
-        "metadata.json",
-        ".env.example"
-      ];
-
-      filesToInclude.forEach(file => {
-        const filePath = path.join(projectRoot, file);
-        if (fs.existsSync(filePath)) {
-          zip.addLocalFile(filePath);
-        }
-      });
 
   app.post("/api/analyze", async (req, res) => {
     try {
