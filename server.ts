@@ -89,50 +89,18 @@ Provide your findings in the following JSON structure:
         prompt += `\n\n[DENSE-SCAN ENABLED] Perform the highest-precision forensic analysis. Pay obsessive attention to PRNU signatures, anomalous edge-gradient discontinuities, generative pattern signatures, and possible latent noise pattern artifacts commonly found in AI-models. Be more critical and strictly analytical.`;
       }
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType: mimeType || "image/jpeg",
-                  data: imageBase64
-                }
-              }
-            ]
-          }
-        ],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              classification: { type: Type.STRING },
-              aiLikelihood: { type: Type.NUMBER },
-              realLikelihood: { type: Type.NUMBER },
-              editedLikelihood: { type: Type.NUMBER },
-              consistencyScore: { type: Type.NUMBER },
-              confidenceLevel: { type: Type.STRING },
-              keyEvidence: { 
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              },
-              detectedIssues: { 
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              },
-              mostLikelySource: { type: Type.STRING },
-              forensicSummary: { type: Type.STRING },
-              finalVerdict: { type: Type.STRING }
-            },
-            required: ["classification", "aiLikelihood", "realLikelihood", "editedLikelihood", "consistencyScore", "confidenceLevel", "keyEvidence", "detectedIssues", "mostLikelySource", "forensicSummary", "finalVerdict"]
-          }
-        }
-      });
+      const ollamaResponse = await axios.post(
+  "http://localhost:11434/api/generate",
+  {
+    model: "gemma3",
+    prompt: prompt,
+    stream: false
+  }
+);
 
-      const analysis = JSON.parse(response.text || "{}");
+const analysis = JSON.parse(
+  ollamaResponse.data.response
+);
       res.json(analysis);
 
     } catch (error: any) {
