@@ -3,20 +3,11 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import AdmZip from "adm-zip";
+import axios from "axios";
 
 dotenv.config();
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
 
 async function startServer() {
   const app = express();
@@ -26,11 +17,6 @@ async function startServer() {
   app.use(express.json({ limit: '20mb' }));
 
   // API Routes
-  app.get("/api/download-source", (req, res) => {
-    try {
-      const zip = new AdmZip();
-      const projectRoot = process.cwd();
-      
       // Include selected root files
       const filesToInclude = [
         "package.json",
@@ -48,22 +34,6 @@ async function startServer() {
           zip.addLocalFile(filePath);
         }
       });
-
-      // Include entire src directory
-      const srcPath = path.join(projectRoot, "src");
-      if (fs.existsSync(srcPath)) {
-        zip.addLocalFolder(srcPath, "src");
-      }
-
-      const zipBuffer = zip.toBuffer();
-      res.set('Content-Type', 'application/zip');
-      res.set('Content-Disposition', 'attachment; filename=ForensicGuard_Source.zip');
-      res.send(zipBuffer);
-    } catch (error) {
-      console.error("Source Download Error:", error);
-      res.status(500).send("Failed to generate source zip");
-    }
-  });
 
   app.post("/api/analyze", async (req, res) => {
     try {
