@@ -17,7 +17,46 @@ async function startServer() {
   app.use(express.json({ limit: '20mb' }));
 
   // API Routes
-      // Include selected root files
+app.get("/api/download-source", (req, res) => {
+try {
+const zip = new AdmZip();
+const projectRoot = process.cwd();
+
+// Include selected root files  
+  const filesToInclude = [  
+    "package.json",  
+    "tsconfig.json",  
+    "vite.config.ts",  
+    "server.ts",  
+    "index.html",  
+    "metadata.json",  
+    ".env.example"  
+  ];  
+
+  filesToInclude.forEach(file => {  
+    const filePath = path.join(projectRoot, file);  
+    if (fs.existsSync(filePath)) {  
+      zip.addLocalFile(filePath);  
+    }  
+  });  
+
+  // Include entire src directory  
+  const srcPath = path.join(projectRoot, "src");  
+  if (fs.existsSync(srcPath)) {  
+    zip.addLocalFolder(srcPath, "src");  
+  }  
+
+  const zipBuffer = zip.toBuffer();  
+  res.set('Content-Type', 'application/zip');  
+  res.set('Content-Disposition', 'attachment; filename=ForensicGuard_Source.zip');  
+  res.send(zipBuffer);  
+} catch (error) {  
+  console.error("Source Download Error:", error);  
+  res.status(500).send("Failed to generate source zip");  
+}
+
+});
+      
       const filesToInclude = [
         "package.json",
         "tsconfig.json",
