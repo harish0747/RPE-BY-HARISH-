@@ -82,8 +82,12 @@ async function startServer() {
         "classification": "AI-generated" | "Real" | "Edited" | "Deepfake" | "Hybrid" | "Uncertain",
         "aiProbabilityScore": number (0-100),
         "confidenceLevel": "Low" | "Medium" | "High" | "Very High",
-        "finalForensicSummary": string (reason, forensic evidence)
+        "finalForensicSummary": string,
+        "reconstructedPrompt": string,
+        "reportContent": string
       }
+      If AI-generated, provide the most likely prompt used to create this image for reconstructedPrompt, otherwise set it to "N/A".
+      Provide a concise 1-page summary of the analysis progress, forensic evidence, and findings for reportContent.
       Do not put the JSON in markdown code blocks, return only the JSON string.`;
 
       let response: any;
@@ -91,7 +95,7 @@ async function startServer() {
       while (retries > 0) {
         try {
           response = await ai.models.generateContent({
-            model: "gemini-flash-latest",
+            model: "gemini-3.5-flash",
             contents: {
               parts: [
                 { inlineData: { mimeType, data: base64Data } },

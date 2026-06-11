@@ -42,11 +42,7 @@ export async function simulateForensicAnalysis(imageBase64: string, deepScan: bo
         suspiciousRegions: [],
         physicsCameraValidation: "N/A",
         finalForensicSummary: aiResult.finalForensicSummary || "Analysis inconclusive.",
-        reversePromptReconstruction: {
-            prompt: "",
-            model: "",
-            style: "",
-            loraPossibility: "",
-        }
+        reconstructedPrompt: aiResult.reconstructedPrompt || "N/A",
+        reportContent: aiResult.reportContent || "No detailed report available."
     };
 }

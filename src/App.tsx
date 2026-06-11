@@ -119,12 +119,8 @@ export default function App() {
       suspiciousRegions: [],
       physicsCameraValidation: '',
       finalForensicSummary: '',
-      reversePromptReconstruction: {
-        prompt: '',
-        model: '',
-        style: '',
-        loraPossibility: ''
-      }
+      reconstructedPrompt: '',
+      reportContent: ''
     }));
 
     // Read thumbnails
@@ -228,7 +224,8 @@ export default function App() {
       ["Confidence Level", data.confidenceLevel.toUpperCase()],
       ["AI Prob.", `${data.aiProbabilityScore}%`],
       ["SynthID Detected", data.synthID.detected],
-      ["Watermark Prob.", `${data.synthID.watermarkProbability}%`]
+      ["Watermark Prob.", `${data.synthID.watermarkProbability}%`],
+      ["Reconstructed Prompt", data.reconstructedPrompt]
     ];
 
     autoTable(doc, {
@@ -247,8 +244,18 @@ export default function App() {
     
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    const splitSummary = doc.splitTextToSize(data.forensicSummary, 180);
+    const splitSummary = doc.splitTextToSize(data.finalForensicSummary, 180);
     doc.text(splitSummary, 15, finalY + 10);
+
+    const reportY = finalY + 20 + splitSummary.length * 5;
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("DETAILED FORENSIC REPORT", 15, reportY);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    const splitReport = doc.splitTextToSize(data.reportContent, 180);
+    doc.text(splitReport, 15, reportY + 10);
 
     doc.save(`Forensic_Report_${forensicID}.pdf`);
   };
@@ -498,17 +505,18 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4">
                           <div className="p-4 border border-[#141414] rounded-xl bg-[#0A0A0A]">
-                            <p className="text-[10px] font-mono text-[#F27D26] uppercase tracking-widest mb-2">Forensic Indicators</p>
-                            <ul className="space-y-1">
-                                {result.forensicIndicators.map((ind, i) => (
-                                    <li key={i} className="text-xs opacity-80 flex gap-2"><span>•</span>{ind}</li>
-                                ))}
-                            </ul>
+                            <p className="text-[10px] font-mono text-[#F27D26] uppercase tracking-widest mb-2">Reconstructed Prompt</p>
+                            <p className="text-xs opacity-80 leading-relaxed font-mono">{result.reconstructedPrompt}</p>
                           </div>
 
-                           <div className="p-4 border border-[#141414] rounded-xl bg-[#0A0A0A]">
+                          <div className="p-4 border border-[#141414] rounded-xl bg-[#0A0A0A]">
+                             <p className="text-[10px] font-mono text-[#F27D26] uppercase tracking-widest mb-2">Forensic Report</p>
+                             <p className="text-xs opacity-80 leading-relaxed whitespace-pre-line">{result.reportContent}</p>
+                          </div>
+
+                          <div className="p-4 border border-[#141414] rounded-xl bg-[#0A0A0A]">
                             <p className="text-[10px] font-mono text-[#F27D26] uppercase tracking-widest mb-2">Summary</p>
                             <p className="text-xs opacity-80 leading-relaxed">{result.finalForensicSummary}</p>
                           </div>

@@ -2,6 +2,9 @@ export interface AnalysisResult {
   classification: 'AI-generated' | 'Real' | 'Edited' | 'Deepfake' | 'Hybrid' | 'Uncertain';
   aiProbabilityScore: number;
   confidenceLevel: 'Low' | 'Medium' | 'High' | 'Very High';
+  finalForensicSummary: string;
+  reconstructedPrompt: string;
+  reportContent: string;
   detailedModelScores: {
     stableDiffusion: number;
     midjourney: number;
@@ -19,13 +22,6 @@ export interface AnalysisResult {
   forensicIndicators: string[];
   suspiciousRegions: string[];
   physicsCameraValidation: string;
-  finalForensicSummary: string;
-  reversePromptReconstruction: {
-    prompt: string;
-    model: string;
-    style: string;
-    loraPossibility: string;
-  };
 }
 
 export interface BatchResult extends AnalysisResult {
