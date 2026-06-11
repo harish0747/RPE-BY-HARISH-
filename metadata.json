@@ -1,7 +1,6 @@
 {
-  "name": "RPE BY HARISH",
+  "name": "AI Image Forensics Tool",
   "description": "Professional Digital Forensics and AI Image Detection tool using advanced multimodal analysis.",
-  "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]

@@ -36,32 +36,10 @@ import autoTable from "jspdf-autotable";
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import MetadataInspector from './components/MetadataInspector';
+import { AnalysisResult, BatchResult } from './types';
+import { simulateForensicAnalysis } from './forensics/localAnalysis';
 
-// Extend jsPDF for autoTable (no longer needed, but removing cleanup)
-
-interface AnalysisResult {
-  classification: 'AI-generated' | 'Real' | 'Edited' | 'Mixed/Uncertain';
-  aiLikelihood: number;
-  realLikelihood: number;
-  editedLikelihood: number;
-  consistencyScore: number;
-  confidenceLevel: 'Low' | 'Medium' | 'High';
-  keyEvidence: string[];
-  detectedIssues: string[];
-  mostLikelySource: string;
-  forensicSummary: string;
-  finalVerdict: string;
-}
-
-interface BatchResult extends AnalysisResult {
-  id: string;
-  filename: string;
-  timestamp: string;
-  thumbnail: string;
-  status: 'pending' | 'analyzing' | 'completed' | 'error';
-}
-
-type SortField = 'filename' | 'classification' | 'aiLikelihood' | 'timestamp' | 'consistencyScore';
+type SortField = 'filename' | 'classification' | 'aiProbabilityScore' | 'timestamp';
 type SortOrder = 'asc' | 'desc';
 
 export default function App() {
@@ -120,17 +98,33 @@ export default function App() {
       timestamp: new Date().toISOString(),
       thumbnail: '', // Will be filled
       status: 'pending',
-      classification: 'Mixed/Uncertain',
-      aiLikelihood: 0,
-      realLikelihood: 0,
-      editedLikelihood: 0,
-      consistencyScore: 0,
+      classification: 'Uncertain',
+      aiProbabilityScore: 0,
       confidenceLevel: 'Low',
-      keyEvidence: [],
-      detectedIssues: [],
-      mostLikelySource: '',
-      forensicSummary: '',
-      finalVerdict: ''
+      detailedModelScores: {
+        stableDiffusion: 0,
+        midjourney: 0,
+        dallE: 0,
+        flux: 0,
+        gan: 0,
+        deepfake: 0,
+        aiEnhancement: 0
+      },
+      synthID: {
+        detected: 'No',
+        watermarkProbability: 0,
+        removalSuspicion: 'Low'
+      },
+      forensicIndicators: [],
+      suspiciousRegions: [],
+      physicsCameraValidation: '',
+      finalForensicSummary: '',
+      reversePromptReconstruction: {
+        prompt: '',
+        model: '',
+        style: '',
+        loraPossibility: ''
+      }
     }));
 
     // Read thumbnails
@@ -153,18 +147,8 @@ export default function App() {
     setIsAnalyzing(true);
     setError(null);
     try {
-      const base64 = selectedImage.split(',')[1];
-      const mimeType = selectedImage.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
-
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64, mimeType, deepScan }),
-      });
-
-      if (!response.ok) throw new Error('Analysis failed.');
-      const data = await response.json();
-      setResult(data);
+      const result = await simulateForensicAnalysis(selectedImage, deepScan);
+      setResult(result);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -180,19 +164,8 @@ export default function App() {
       setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, status: 'analyzing' } : i));
       
       try {
-        const base64 = item.thumbnail.split(',')[1];
-        const mimeType = item.thumbnail.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
-
-        const response = await fetch('/api/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: base64, mimeType, deepScan }),
-        });
-
-        if (!response.ok) throw new Error('Failed');
-        const data = await response.json();
-        
-        setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, ...data, status: 'completed' } : i));
+        const result = await simulateForensicAnalysis(item.thumbnail, deepScan);
+        setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, ...result, status: 'completed' } : i));
       } catch (err) {
         setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error' } : i));
       }
@@ -209,6 +182,9 @@ export default function App() {
     return list.sort((a, b) => {
       const valA = a[sortField];
       const valB = b[sortField];
+
+      if (valA === undefined) return 1;
+      if (valB === undefined) return -1;
 
       if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
@@ -238,7 +214,7 @@ export default function App() {
     doc.rect(0, 0, 210, 40, 'F');
     doc.setTextColor(242, 125, 38);
     doc.setFontSize(22);
-    doc.text("FORENSICGUARD AI", 15, 20);
+    doc.text("RPE BY HARISH", 15, 20);
     
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(10);
@@ -250,9 +226,9 @@ export default function App() {
       ["Filename", (data as any).filename || "evidence_single.jpg"],
       ["Classification", data.classification.toUpperCase()],
       ["Confidence Level", data.confidenceLevel.toUpperCase()],
-      ["AI Likelihood", `${data.aiLikelihood}%`],
-      ["Real Likelihood", `${data.realLikelihood}%`],
-      ["Consistency Score", `${data.consistencyScore}%`]
+      ["AI Prob.", `${data.aiProbabilityScore}%`],
+      ["SynthID Detected", data.synthID.detected],
+      ["Watermark Prob.", `${data.synthID.watermarkProbability}%`]
     ];
 
     autoTable(doc, {
@@ -260,7 +236,7 @@ export default function App() {
       head: [["Attribute", "Value"]],
       body: metadata,
       theme: 'striped',
-      headStyles: { fillType: 'solid', fillColor: [20, 20, 20], textColor: [242, 125, 38] },
+      headStyles: { fillColor: [20, 20, 20], textColor: [242, 125, 38] },
     });
 
     const finalY = (doc as any).lastAutoTable.finalY + 15;
@@ -309,9 +285,8 @@ export default function App() {
     const csv = Papa.unparse(batchResults.map(r => ({
       Filename: r.filename,
       Classification: r.classification,
-      AI_Likelihood: `${r.aiLikelihood}%`,
-      Real_Likelihood: `${r.realLikelihood}%`,
-      Consistency: `${r.consistencyScore}%`,
+      AI_Probability_Score: `${r.aiProbabilityScore}%`,
+      Confidence: r.confidenceLevel,
       Timestamp: r.timestamp
     })));
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -363,15 +338,6 @@ export default function App() {
               Batch Matrix
             </button>
           </div>
-          <a 
-            href="/api/download-source"
-            download
-            className="flex items-center gap-2 text-[10px] sm:text-xs uppercase tracking-widest text-[#F27D26] hover:text-[#ffb17a] transition-all border border-[#F27D26]/40 px-3 py-2 rounded-lg bg-[#F27D26]/10 font-bold shadow-[0_0_10px_rgba(242,125,38,0.1)] hover:shadow-[0_0_20px_rgba(242,125,38,0.2)] active:scale-95"
-          >
-            <Download className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span className="hidden xs:inline">Download Source Zip</span>
-            <span className="xs:hidden">Source</span>
-          </a>
           {(selectedImage || batchResults.length > 0) && (
             <button 
               onClick={reset}
@@ -517,31 +483,35 @@ export default function App() {
                               </h3>
                             </div>
                             <div className="text-right">
-                              <p className="text-[10px] uppercase font-mono opacity-50 tracking-widest mb-1">AI Likelihood</p>
-                              <span className="text-3xl font-mono font-bold leading-none">{result.aiLikelihood}%</span>
+                              <p className="text-[10px] uppercase font-mono opacity-50 tracking-widest mb-1">AI Prob.</p>
+                              <span className="text-3xl font-mono font-bold leading-none">{result.aiProbabilityScore}%</span>
                             </div>
                           </div>
-                          <div className="mt-4 flex gap-4">
-                            <div className="flex-1 text-center">
-                                <p className="text-[9px] uppercase opacity-40">Real</p>
-                                <p className="text-sm font-mono font-bold text-green-500">{result.realLikelihood}%</p>
-                            </div>
-                            <div className="flex-1 text-center border-l border-white/5">
-                                <p className="text-[9px] uppercase opacity-40">Edited</p>
-                                <p className="text-sm font-mono font-bold text-yellow-500">{result.editedLikelihood}%</p>
-                            </div>
+                          
+                          <div className="grid grid-cols-4 gap-2 mt-4 text-center border-t border-white/5 pt-4">
+                            {Object.entries(result.detailedModelScores || {}).map(([model, score]) => (
+                                <div key={model}>
+                                    <p className="text-[9px] uppercase opacity-40 truncate">{model}</p>
+                                    <p className="text-sm font-mono font-bold text-[#F27D26]">{score}%</p>
+                                </div>
+                            ))}
                           </div>
                         </div>
-                        <div className="p-4 border border-[#141414] rounded-xl bg-[#0A0A0A]">
-                          <div className="flex items-center gap-2 mb-3 text-[10px] font-mono text-[#F27D26] uppercase tracking-widest"><FileSearch className="w-4 h-4" /> Forensic Evidence/Issues</div>
-                          <ul className="space-y-2">
-                            {result.keyEvidence.map((ind, i) => (
-                              <li key={i} className="text-xs flex gap-3 opacity-80"><span className="text-[#F27D26]">✓</span>{ind}</li>
-                            ))}
-                            {result.detectedIssues.map((ind, i) => (
-                              <li key={i} className="text-xs flex gap-3 opacity-80"><span className="text-red-500">!</span>{ind}</li>
-                            ))}
-                          </ul>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="p-4 border border-[#141414] rounded-xl bg-[#0A0A0A]">
+                            <p className="text-[10px] font-mono text-[#F27D26] uppercase tracking-widest mb-2">Forensic Indicators</p>
+                            <ul className="space-y-1">
+                                {result.forensicIndicators.map((ind, i) => (
+                                    <li key={i} className="text-xs opacity-80 flex gap-2"><span>•</span>{ind}</li>
+                                ))}
+                            </ul>
+                          </div>
+
+                           <div className="p-4 border border-[#141414] rounded-xl bg-[#0A0A0A]">
+                            <p className="text-[10px] font-mono text-[#F27D26] uppercase tracking-widest mb-2">Summary</p>
+                            <p className="text-xs opacity-80 leading-relaxed">{result.finalForensicSummary}</p>
+                          </div>
                         </div>
                       </motion.div>
                     ) : (
@@ -629,16 +599,11 @@ export default function App() {
                         </th>
                         <th 
                           className="p-4 text-[10px] uppercase font-mono tracking-[0.2em] opacity-40 cursor-pointer hover:opacity-100 transition-opacity text-center"
-                          onClick={() => toggleSort('aiLikelihood')}
+                          onClick={() => toggleSort('aiProbabilityScore')}
                         >
-                          <div className="flex items-center justify-center gap-2">AI Likelihood {sortField === 'aiLikelihood' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}</div>
+                          <div className="flex items-center justify-center gap-2">AI Score {sortField === 'aiProbabilityScore' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}</div>
                         </th>
-                        <th 
-                          className="p-4 text-[10px] uppercase font-mono tracking-[0.2em] opacity-40 cursor-pointer hover:opacity-100 transition-opacity text-center"
-                          onClick={() => toggleSort('consistencyScore')}
-                        >
-                          <div className="flex items-center justify-center gap-2">Consistency {sortField === 'consistencyScore' && (sortOrder === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}</div>
-                        </th>
+                        <th className="p-4 text-[10px] uppercase font-mono tracking-[0.2em] opacity-40 text-center">Confidence</th>
                         <th className="p-4 text-[10px] uppercase font-mono tracking-[0.2em] opacity-40">Status</th>
                         <th className="p-4 text-[10px] uppercase font-mono tracking-[0.2em] opacity-40 text-right">Actions</th>
                       </tr>
@@ -681,16 +646,11 @@ export default function App() {
                             )}
                           </td>
                           <td className="p-4 text-center">
-                            <span className="font-mono text-sm">{item.status === 'completed' ? `${item.aiLikelihood}%` : '--'}</span>
+                            <span className="font-mono text-sm">{item.status === 'completed' ? `${item.aiProbabilityScore}%` : '--'}</span>
                           </td>
                           <td className="p-4 text-center">
                              <div className="flex flex-col items-center gap-1">
-                               <span className="font-mono text-sm">{item.status === 'completed' ? `${item.consistencyScore}%` : '--'}</span>
-                               {item.status === 'completed' && (
-                                 <div className="w-12 h-1 bg-white/5 rounded-full overflow-hidden">
-                                   <div className="h-full bg-blue-500" style={{ width: `${item.consistencyScore}%` }} />
-                                 </div>
-                               )}
+                               <span className="font-mono text-sm">{item.status === 'completed' ? item.confidenceLevel : '--'}</span>
                              </div>
                           </td>
                           <td className="p-4">
@@ -741,9 +701,6 @@ export default function App() {
         )}
       </main>
 
-      <footer className="mt-20 border-t border-[#141414] p-8 text-center text-[10px] opacity-30 font-mono uppercase tracking-[0.4em]">
-        Signal Processed via Gemini Neural Core • 2026 Virtual Forensics Div.
-      </footer>
     </div>
   );
 }
