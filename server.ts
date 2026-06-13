@@ -63,9 +63,13 @@ async function startServer() {
     }
 
     try {
-      // Initialize properly as per gemini-api skill
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("GEMINI_API_KEY environment variable is required");
+      }
+      
       const ai = new GoogleGenAI({
-        apiKey: process.env.GEMINI_API_KEY!,
+        apiKey: apiKey,
         httpOptions: {
           headers: {
             'User-Agent': 'aistudio-build',
@@ -95,7 +99,7 @@ async function startServer() {
       while (retries > 0) {
         try {
           response = await ai.models.generateContent({
-            model: "gemini-3.5-flash",
+            model: "gemini-3.1-flash-lite",
             contents: {
               parts: [
                 { inlineData: { mimeType, data: base64Data } },
@@ -103,11 +107,15 @@ async function startServer() {
               ]
             },
           });
+          console.log("Gemini API Response:", JSON.stringify(response, null, 2));
           break;
         } catch (error: any) {
           retries--;
           console.error(`Analysis attempt failed (Attempt ${3 - retries}/3):`, error.message || error);
-          if (retries === 0) throw error;
+          if (retries === 0) {
+            console.error("Final Analysis Error:", error);
+            throw error;
+          }
           // Exponential backoff
           const delay = (Math.pow(2, 3 - retries) * 2000) + (Math.random() * 1000);
           console.log(`Retrying in ${Math.round(delay)}ms...`);
